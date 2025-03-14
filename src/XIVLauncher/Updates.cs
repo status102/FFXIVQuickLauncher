@@ -1,13 +1,13 @@
 #nullable enable
 
+using CheapLoc;
+using Newtonsoft.Json.Linq;
+using Serilog;
 using System;
 using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
 using System.Windows;
-using CheapLoc;
-using Newtonsoft.Json.Linq;
-using Serilog;
 using Velopack;
 using Velopack.Sources;
 using XIVLauncher.Windows;
@@ -17,26 +17,26 @@ namespace XIVLauncher;
 internal class Updates
 {
     public event Action<bool>? OnUpdateCheckFinished;
-    private const string       UpdateUrl = "https://github.com/AtmoOmen/FFXIVQuickLauncher";
+    private const string UpdateUrl = "https://github.com/AtmoOmen/FFXIVQuickLauncher";
 
     public static Lease? UpdateLease { get; private set; }
 
     [Flags]
     public enum LeaseFeatureFlags
     {
-        None                       = 0,
-        GlobalDisableDalamud       = 1,
+        None = 0,
+        GlobalDisableDalamud = 1,
         ForceProxyDalamudAndAssets = 1 << 1
     }
 
 #pragma warning disable CS8618
     public class Lease
     {
-        public bool              Success       { get; set; }
-        public string?           Message       { get; set; }
-        public string?           CutOffBootver { get; set; }
-        public string            FrontierUrl   { get; set; }
-        public LeaseFeatureFlags Flags         { get; set; }
+        public bool Success { get; set; }
+        public string? Message { get; set; }
+        public string? CutOffBootver { get; set; }
+        public string FrontierUrl { get; set; }
+        public LeaseFeatureFlags Flags { get; set; }
 
         public string ReleasesList { get; set; }
 
@@ -47,6 +47,28 @@ internal class Updates
     public static bool HaveFeatureFlag(LeaseFeatureFlags flag)
     {
         return UpdateLease != null && UpdateLease.Flags.HasFlag(flag);
+    }
+
+    public class Updater : HttpClientFileDownloader
+    {
+        protected override HttpClientHandler CreateHttpClientHandler()
+        {
+            var handler = base.CreateHttpClientHandler();
+            if (GetProxy() is { } p)
+            {
+                handler.Proxy = p;
+                handler.UseProxy = true;
+            }
+
+            return handler;
+        }
+    }
+
+    public static WebProxy? GetProxy()
+    {
+        var Proxy = "http://127.0.0.1:10086";
+        var proxyIsUri = Uri.TryCreate(Proxy, UriKind.RelativeOrAbsolute, out var uri);
+        return (proxyIsUri && (!string.IsNullOrEmpty(Proxy))) is false ? null : new WebProxy(uri);
     }
 
     public async Task Run(bool downloadPrerelease, ChangelogWindow? changelogWindow)
@@ -62,23 +84,36 @@ internal class Updates
         {
             try
             {
-                using var httpClient = new HttpClient();
+                var handler = new HttpClientHandler
+                {
+                    AutomaticDecompression = DecompressionMethods.All,
+                    AllowAutoRedirect = true,
+                };
+
+                var proxy = GetProxy();
+                if (proxy != null)
+                {
+                    handler.Proxy = proxy;
+                    handler.UseProxy = true;
+                }
+
+                using var httpClient = new HttpClient(handler);
                 httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("XIVLauncherCN");
-                if (!string.IsNullOrWhiteSpace(App.Settings.GitHubToken)) 
+                if (!string.IsNullOrWhiteSpace(App.Settings.GitHubToken))
                     httpClient.DefaultRequestHeaders.Authorization = new("Bearer", App.Settings.GitHubToken);
                 var response = await httpClient.GetAsync("https://api.github.com/rate_limit");
                 response.EnsureSuccessStatusCode();
 
-                var     json      = await response.Content.ReadAsStringAsync();
+                var json = await response.Content.ReadAsStringAsync();
                 dynamic rateLimit = JObject.Parse(json);
-                int     remaining = rateLimit.resources.core.remaining;
+                int remaining = rateLimit.resources.core.remaining;
 
                 if (remaining == 0)
                 {
                     int resetTimestamp = rateLimit.resources.core.reset;
-                    var resetTime      = DateTimeOffset.FromUnixTimeSeconds(resetTimestamp).LocalDateTime;
+                    var resetTime = DateTimeOffset.FromUnixTimeSeconds(resetTimestamp).LocalDateTime;
                     CustomMessageBox.Show($"当前 IP 的 GitHub API 调用额度已用尽, 下次刷新时间: {resetTime:HH:mm:ss}\n" +
-                                          $"请耐心等待或更换你的网络环境\n"                                           + 
+                                          $"请耐心等待或更换你的网络环境\n" +
                                           $"如果你不清楚如何更换网络环境, 请勿询问并立刻卸载本软件, 多谢配合",
                                           "XIVLauncherCN",
                                           MessageBoxButton.OK,
@@ -97,8 +132,8 @@ internal class Updates
             }
 
             var updateOptions = new UpdateOptions { ExplicitChannel = "win", AllowVersionDowngrade = true };
-            var updateSource  = new GithubSource(UpdateUrl, App.Settings.GitHubToken, true);
-            var mgr           = new UpdateManager(updateSource, updateOptions);
+            var updateSource = new GithubSource(UpdateUrl, App.Settings.GitHubToken, true);
+            var mgr = new UpdateManager(updateSource, updateOptions);
 
             var newRelease = await mgr.CheckForUpdatesAsync();
 
@@ -142,7 +177,7 @@ internal class Updates
                 (int)httpRequestException.StatusCode is 403 or 444 or 522)
             {
                 CustomMessageBox.Show($"错误: GitHub 服务器返回错误代码 {httpRequestException.StatusCode}.\n" +
-                                      Environment.NewLine                                          + updateFailLoc,
+                                      Environment.NewLine + updateFailLoc,
                                       "XIVLauncherCN",
                                       MessageBoxButton.OK,
                                       MessageBoxImage.Error, showOfficialLauncher: true);
@@ -165,10 +200,13 @@ internal class Updates
                                                    showDiscordLink: false,
                                                    showHelpLinks: false);
 
-                if (result == MessageBoxResult.Yes) this.OnUpdateCheckFinished?.Invoke(true);
-                else Environment.Exit(1);
+                if (result == MessageBoxResult.Yes)
+                    this.OnUpdateCheckFinished?.Invoke(true);
+                else
+                    Environment.Exit(1);
             }
-            else Environment.Exit(1);
+            else
+                Environment.Exit(1);
         }
 
         ServicePointManager.SecurityProtocol = SecurityProtocolType.SystemDefault;
