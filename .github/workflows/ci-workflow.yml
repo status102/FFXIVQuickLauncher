@@ -63,7 +63,7 @@ jobs:
         uses: actions/upload-artifact@master
         with:
           name: xivlauncher-artifact
-          path: src\bin\
+          path: bin\
 
       - name: Upload
         id: upload-velopack
