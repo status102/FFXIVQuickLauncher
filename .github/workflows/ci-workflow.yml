@@ -9,7 +9,7 @@ jobs:
   build-release:
     name: Build Release on Windows
     if: startsWith(github.ref, 'refs/tags/')
-    runs-on: windows-2022
+    runs-on: windows-latest
     permissions:
       contents: write
     steps:
@@ -62,10 +62,10 @@ jobs:
           Get-ChildItem -Name
 
       - name: Upload artifact
-        uses: actions/upload-artifact@master
+        uses: actions/upload-artifact@v4
         with:
           name: xivlauncher-artifact
-          path: Releases
+          path: .
 
       - name: Velopack Upload
         id: upload-velopack
