@@ -63,7 +63,19 @@ jobs:
         uses: actions/upload-artifact@master
         with:
           name: xivlauncher-artifact
-          path: bin\
+          path: .\Releases
+
+      - name: Upload
+        id: upload-velopack
+        run: |
+          vpk upload github --repoUrl https://github.com/${{ github.repository }} --channel $channel --publish --releaseName "Release $refver" --token ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Delete installer
+        uses: mknejp/delete-release-assets@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ github.ref }}
+          assets: '*.exe'
           
 
   build:
