@@ -9,7 +9,7 @@ jobs:
   build-release:
     name: Build Release on Windows
     if: startsWith(github.ref, 'refs/tags/')
-    runs-on: windows-2022
+    runs-on: windows-latest
     permissions:
       contents: write
     steps:
@@ -45,7 +45,7 @@ jobs:
       - name: Generate Hashes File
         run: .\scripts\CreateHashList.ps1 .\src\bin\win-x64
 
-      - name: Velopack Build
+      - name: Velopack Build and Upload
         id: build-velopack
         run: |
           $channel = "win"
@@ -58,20 +58,12 @@ jobs:
           dotnet tool install -g vpk
           vpk download github --repoUrl https://github.com/${{ github.repository }}
           vpk pack -u XIVLauncherCN -v $refver -p .\bin\win-x64 -o .\Releases -e XIVLauncherCN.exe --channel $channel --packAuthors OmenCorp --releaseNotes .\XIVLauncher\Resources\CHANGELOG.txt --icon .\XIVLauncher\Resources\dalamud_icon.ico --splashImage .\XIVLauncher\Resources\logo.png --framework net8.0-x64-desktop --noInst
-          Get-Location
-          Get-ChildItem -Name
-
+          vpk upload github --repoUrl https://github.com/${{ github.repository }} --channel $channel --publish --releaseName "Release $refver" --token ${{ secrets.GITHUB_TOKEN }}
       - name: Upload artifact
-        uses: actions/upload-artifact@master
+        uses: actions/upload-artifact@v4
         with:
           name: xivlauncher-artifact
-          path: Releases
-
-      - name: Velopack Upload
-        id: upload-velopack
-        run: |
-          vpk pack -u XIVLauncherCN -v $refver -p .\bin\win-x64 -o .\Releases -e XIVLauncherCN.exe --channel $channel --packAuthors OmenCorp --releaseNotes .\XIVLauncher\Resources\CHANGELOG.txt --icon .\XIVLauncher\Resources\dalamud_icon.ico --splashImage .\XIVLauncher\Resources\logo.png --framework net8.0-x64-desktop --noInst
-
+          path: src\Release
 
   build:
     name: Build on Windows
